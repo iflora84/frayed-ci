@@ -1,3 +1,4 @@
+import BackgroundTasks
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -14,8 +15,9 @@ struct FrayedApp: App {
     }
 }
 
-/// Owns the model so it exists before any scene, and receives the recap
-/// notification tap: it opens the Recap tab, nothing else.
+/// Owns the model so it exists before any scene, runs the background
+/// refresh before the recap time, and receives the recap notification tap:
+/// it opens the Recap tab, nothing else.
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     private(set) lazy var model = AppModel.fromLaunchArguments()
@@ -25,8 +27,31 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Must be registered before launch finishes; .main keeps the handler
+        // on the model's actor.
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: AppModel.refreshTaskIdentifier, using: .main) { task in
+            MainActor.assumeIsolated {
+                self.runRefresh(task)
+            }
+        }
         model.scheduleRecapNotification()
         return true
+    }
+
+    /// Writes today's recap, then books tomorrow's wake-up. iOS may cut the
+    /// task short; the recap is then written on the next open instead.
+    private func runRefresh(_ task: BGTask) {
+        model.scheduleBackgroundRefresh(after: Date().addingTimeInterval(AppModel.backgroundLead))
+        let work = Task { @MainActor in
+            await self.model.refreshRecap(inBackground: true)
+            if !Task.isCancelled {
+                task.setTaskCompleted(success: true)
+            }
+        }
+        task.expirationHandler = {
+            work.cancel()
+            task.setTaskCompleted(success: false)
+        }
     }
 
     nonisolated func userNotificationCenter(

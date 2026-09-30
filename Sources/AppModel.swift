@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Foundation
 import LocalAuthentication
 import UserNotifications
@@ -94,6 +95,10 @@ final class AppModel: ObservableObject {
     static let elevatedMargin = 25
     static let keptDays = 60
     static let refreshInterval: TimeInterval = 15 * 60
+    /// Info.plist BGTaskSchedulerPermittedIdentifiers.
+    static let refreshTaskIdentifier = "com.iflora.frayed.refresh"
+    /// How long before the recap time the background refresh may start.
+    static let backgroundLead: TimeInterval = 30 * 60
     /// A recap day runs 04:00 to 04:00 (RECAP 1).
     static let dayStartHour = 4
 
@@ -280,7 +285,10 @@ final class AppModel: ObservableObject {
 
     /// HealthService.recapInput -> RecapEngine.generate -> RecapStore.save,
     /// then the ledgers and a .recap Moment for the day.
-    func refreshRecap() async {
+    /// `inBackground` is the refresh task before the notification: a locked
+    /// phone or a failed write there is expected and stays silent; the next
+    /// open retries.
+    func refreshRecap(inBackground: Bool = false) async {
         guard !isDemo, let health = health, healthStatus == .authorized, !isRefreshing else {
             return
         }
@@ -329,9 +337,13 @@ final class AppModel: ObservableObject {
         } catch HealthServiceError.unavailable {
             setHealthStatus(.unavailable)
         } catch HealthServiceError.protectedDataUnavailable {
-            storeError = "Apple Health is locked until you unlock your iPhone."
+            if !inBackground {
+                storeError = "Apple Health is locked until you unlock your iPhone."
+            }
         } catch {
-            storeError = "The recap could not be written. Unlock your iPhone and try again."
+            if !inBackground {
+                storeError = "The recap could not be written. Unlock your iPhone and try again."
+            }
         }
     }
 
@@ -655,6 +667,23 @@ final class AppModel: ObservableObject {
         let trigger = UNCalendarNotificationTrigger(dateMatching: recapSchedule.dateComponents, repeats: true)
         let request = UNNotificationRequest(identifier: RecapNotification.identifier, content: content, trigger: trigger)
         center.add(request) { _ in }
+        scheduleBackgroundRefresh()
+    }
+
+    /// Asks iOS to wake the app about 30 min before the recap time so the
+    /// recap is written before the notification lands. iOS decides when,
+    /// or whether; opening the app still refreshes.
+    func scheduleBackgroundRefresh(after now: Date = Date()) {
+        guard !isDemo else {
+            return
+        }
+        let lead = AppModel.backgroundLead
+        guard let fire = recapSchedule.nextFireDate(after: now.addingTimeInterval(lead), calendar: calendar) else {
+            return
+        }
+        let request = BGAppRefreshTaskRequest(identifier: AppModel.refreshTaskIdentifier)
+        request.earliestBeginDate = fire.addingTimeInterval(-lead)
+        try? BGTaskScheduler.shared.submit(request)
     }
 
     // MARK: Day keys
