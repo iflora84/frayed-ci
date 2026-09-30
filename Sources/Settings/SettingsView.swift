@@ -38,6 +38,14 @@ struct SettingsView: View {
         )
     }
 
+    /// On asks iOS first; the switch follows what was actually granted.
+    private var calendarLabels: Binding<Bool> {
+        Binding(
+            get: { model.calendarLabels },
+            set: { on in Task { await model.setCalendarLabels(on) } }
+        )
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -58,6 +66,26 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 150)
                         .clipped()
+                }
+
+                section("Calendar labels") {
+                    Toggle("Note which spikes overlapped an event", isOn: calendarLabels)
+                        .font(Theme.sans(16))
+                        .foregroundStyle(Theme.charcoal)
+                        .tint(Theme.charcoal)
+                        .frame(minHeight: 44)
+                    if model.calendarLabels {
+                        Toggle("Show event titles", isOn: $model.showEventTitles)
+                            .font(Theme.sans(16))
+                            .foregroundStyle(Theme.charcoal)
+                            .tint(Theme.charcoal)
+                            .frame(minHeight: 44)
+                    }
+                    Text("Read on this iPhone only. Nothing from your calendar is ever posted.")
+                        .font(Theme.sans(13))
+                        .foregroundStyle(Theme.warmGrey)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 8)
                 }
 
                 section("Face ID lock") {

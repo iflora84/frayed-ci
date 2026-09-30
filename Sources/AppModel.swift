@@ -51,6 +51,19 @@ final class AppModel: ObservableObject {
             }
         }
     }
+    /// Calendar labels (RECAP 3): off until the user turns them on and iOS
+    /// grants access. Persisted.
+    @Published private(set) var calendarLabels = false
+    /// Event titles in the recap need their own switch; counts don't.
+    @Published var showEventTitles = false {
+        didSet {
+            guard !isDemo, showEventTitles != oldValue else {
+                return
+            }
+            UserDefaults.standard.set(showEventTitles, forKey: Keys.showEventTitles)
+            Task { await refreshRecap() }
+        }
+    }
     /// True until Face ID or the passcode succeeds, and again after the app
     /// has been in the background. Views stay mounted underneath; LockGate
     /// and the privacy covers hide them.
@@ -94,6 +107,8 @@ final class AppModel: ObservableObject {
         static let spikeTags = "spike.tags"
         static let reactions = "feed.reactions"
         static let lastRefresh = "recap.lastRefresh"
+        static let calendarLabels = "calendar.labels"
+        static let showEventTitles = "calendar.titles"
     }
 
     private init(isDemo: Bool, momentStore: MomentStore, recapStore: RecapStore,
@@ -133,6 +148,8 @@ final class AppModel: ObservableObject {
             openedDays = Set(defaults.stringArray(forKey: Keys.openedDays) ?? [])
             spikeTags = defaults.dictionary(forKey: Keys.spikeTags) as? [String: String] ?? [:]
             lastRefresh = defaults.object(forKey: Keys.lastRefresh) as? Date
+            calendarLabels = defaults.bool(forKey: Keys.calendarLabels)
+            showEventTitles = defaults.bool(forKey: Keys.showEventTitles)
             if let stored = defaults.dictionary(forKey: Keys.reactions) as? [String: [String]] {
                 var out: [String: Set<ReactionKind>] = [:]
                 for (post, names) in stored {
@@ -296,6 +313,8 @@ final class AppModel: ObservableObject {
                     minutes: Int(best.minutes.rounded())
                 )
             }
+            input.calendarAccess = CalendarService.access(from: input.dayStart, to: now,
+                                                          enabled: calendarLabels, showTitles: showEventTitles)
             for index in input.runs.indices {
                 if let tag = spikeTags[input.runs[index].id].flatMap({ SpikeTag(rawValue: $0) }) {
                     input.runs[index].tag = tag
@@ -439,6 +458,23 @@ final class AppModel: ObservableObject {
             }
         }
         return WeekReceipt.build(week: week, recaps: recaps, receiptCount: max(weeks.count, 1), calendar: calendar)
+    }
+
+    // MARK: Calendar labels
+
+    /// Turning labels on asks iOS for calendar access; a refusal leaves
+    /// them off. Either way today's recap is rewritten to match.
+    func setCalendarLabels(_ on: Bool) async {
+        guard !isDemo else {
+            return
+        }
+        let granted = on ? await CalendarService.requestAccess() : false
+        calendarLabels = granted
+        UserDefaults.standard.set(granted, forKey: Keys.calendarLabels)
+        if on && !granted {
+            storeError = "Frayed can't read your calendar. Turn on Full Access for Frayed in Settings, Privacy, Calendars."
+        }
+        await refreshRecap()
     }
 
     // MARK: Posting

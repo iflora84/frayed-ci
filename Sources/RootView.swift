@@ -10,6 +10,18 @@ struct RootView: View {
     @AppStorage(OnboardingView.doneKey) private var onboarded = false
     @State private var age: AgeStatus = AgeCheck.current()
 
+    /// A store or permission problem, shown once; OK clears it.
+    private var showsStoreError: Binding<Bool> {
+        Binding(
+            get: { model.storeError != nil },
+            set: { shown in
+                if !shown {
+                    model.storeError = nil
+                }
+            }
+        )
+    }
+
     var body: some View {
         Group {
             if model.isDemo {
@@ -35,6 +47,9 @@ struct RootView: View {
         .privacyCover()
         .preferredColorScheme(.light)
         .tint(Theme.charcoal)
+        .alert(model.storeError ?? "", isPresented: showsStoreError) {
+            Button("OK") {}
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 model.sceneBecameActive()
