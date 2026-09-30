@@ -54,6 +54,15 @@ enum FeedPost: Identifiable {
         }
     }
 
+    /// The named friend behind a post, whose history it can open; nil for
+    /// your own posts and for anonymous ones.
+    var friend: FeedSample? {
+        if case .sample(let sample) = self, !sample.anonymous {
+            return sample
+        }
+        return nil
+    }
+
     var author: String {
         switch self {
         case .own: return "You"
@@ -104,7 +113,7 @@ enum FeedPost: Identifiable {
             let who = moment.visibility == .anonymous ? "anonymous" : "recap"
             return "\(FrayedFormat.dayStamp(moment.start)) · \(who)"
         case .sample(let sample):
-            let ago = "\(sample.hoursAgo) h ago"
+            let ago = sample.hoursAgo < 24 ? "\(sample.hoursAgo) h ago" : "\(sample.hoursAgo / 24) d ago"
             return sample.anonymous ? "Anonymous · \(ago)" : ago
         }
     }

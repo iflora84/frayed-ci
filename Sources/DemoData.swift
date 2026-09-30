@@ -447,4 +447,60 @@ enum DemoData {
             reactionCounts: [.checking: 2, .hug: 1]
         )
     ]
+
+    /// Older days the same friends posted, for their profile's week. Never
+    /// in the feed itself, and no anonymous posts: a profile must not
+    /// unmask one.
+    static let friendHistory: [FeedSample] = [
+        FeedSample(
+            id: "demo-maya-2",
+            author: "Maya R.",
+            initials: "MR",
+            anonymous: false,
+            hoursAgo: 50,
+            dayType: "Just a Tuesday",
+            headline: "Just a Tuesday · 2 spikes",
+            subline: "Both came down inside 10 min.",
+            body: .recap(summary: Moment.RecapSummary(
+                spikeCount: 2, stillCount: 1, movingCount: 1, workoutCount: 0, noticedCount: 1,
+                load: 22, recoverySeconds: 8 * 60, calmestBpm: 58, dayType: DayType.justAWeekday.rawValue, coverage: 0.92,
+                hourlyPeaks: [0, 0, 0, 60, 61, 62, 64, 88, 70, 66, 65, 64, 63, 92, 70, 66, 65, 64, 63, 62, 61, 60, 0, 0]
+            )),
+            reactionCounts: [.hug: 2]
+        ),
+        FeedSample(
+            id: "demo-maya-3",
+            author: "Maya R.",
+            initials: "MR",
+            anonymous: false,
+            hoursAgo: 122,
+            dayType: "Night shift",
+            headline: "About 40 min awake in bed.",
+            subline: "2 wake-ups the Watch caught.",
+            body: .payStub([
+                FeedSampleLine(label: "Employee", value: "your heart"),
+                FeedSampleLine(label: "Hours awake in bed", value: "about 40 min"),
+                FeedSampleLine(label: "Clock-ins the Watch caught", value: "2"),
+                FeedSampleLine(label: "Net pay", value: "0.00"),
+                FeedSampleLine(label: "Employer", value: "unknown")
+            ]),
+            reactionCounts: [.same: 3]
+        ),
+        FeedSample(
+            id: "demo-priya-2",
+            author: "Priya",
+            initials: "P",
+            anonymous: false,
+            hoursAgo: 75,
+            dayType: "Slow burner",
+            headline: "Slow burner · 4 spikes",
+            subline: "One long stretch after lunch.",
+            body: .recap(summary: Moment.RecapSummary(
+                spikeCount: 4, stillCount: 3, movingCount: 0, workoutCount: 1, noticedCount: 2,
+                load: 44, recoverySeconds: 19 * 60, calmestBpm: 61, dayType: DayType.slowBurner.rawValue, coverage: 0.88,
+                hourlyPeaks: [0, 0, 0, 64, 66, 70, 118, 90, 72, 70, 86, 74, 71, 99, 95, 80, 72, 70, 69, 67, 66, 65, 0, 0]
+            )),
+            reactionCounts: [.hug: 3, .checking: 1]
+        )
+    ]
 }

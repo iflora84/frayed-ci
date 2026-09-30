@@ -49,16 +49,20 @@ struct PostCard: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            avatar
-            VStack(alignment: .leading, spacing: 1) {
-                Text(post.author)
-                    .font(Theme.sans(14, weight: .bold))
-                    .foregroundStyle(Theme.charcoal)
-                    .lineLimit(1)
-                Text(post.meta)
-                    .font(Theme.sans(12))
-                    .foregroundStyle(Theme.warmGrey)
-                    .lineLimit(1)
+            AuthorLink(post: post) {
+                HStack(spacing: 10) {
+                    avatar
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(post.author)
+                            .font(Theme.sans(14, weight: .bold))
+                            .foregroundStyle(Theme.charcoal)
+                            .lineLimit(1)
+                        Text(post.meta)
+                            .font(Theme.sans(12))
+                            .foregroundStyle(Theme.warmGrey)
+                            .lineLimit(1)
+                    }
+                }
             }
             Spacer(minLength: 6)
             if let label = post.dayTypeLabel {

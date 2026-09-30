@@ -239,13 +239,15 @@ struct QuietPost: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(post.author)
-                        .font(Theme.sans(16, weight: .bold))
-                        .foregroundStyle(Theme.charcoal)
-                    Text(post.meta)
-                        .font(Theme.sans(13))
-                        .foregroundStyle(Theme.warmGrey)
+                AuthorLink(post: post) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(post.author)
+                            .font(Theme.sans(16, weight: .bold))
+                            .foregroundStyle(Theme.charcoal)
+                        Text(post.meta)
+                            .font(Theme.sans(13))
+                            .foregroundStyle(Theme.warmGrey)
+                    }
                 }
                 Spacer()
                 PostMenu(isOwn: post.isOwn, notice: $notice)
