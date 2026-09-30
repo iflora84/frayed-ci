@@ -1,0 +1,155 @@
+# Demo-mode screenshots for design review and the App Store. Boots a
+# simulator whose screen is exactly 1290x2796, installs a Debug build, launches
+# it once per screen with the "-demo" arguments and grabs the screen. Run by
+# hand (workflow_dispatch), then download the "screenshots" artifact and feed
+# it to asc_media.py.
+#
+# The device list is not "the largest Pro Max": every Pro Max from the 16 on is
+# 1320x2868, which the App Store files under 6.9" and which the gate below
+# rejects. 1290x2796 is the 430x932@3x class, and these four are its members.
+name: Screenshots
+
+on:
+  workflow_dispatch:
+
+env:
+  SCHEME: Frayed
+  BUNDLE_ID: com.iflora.frayed
+  SHOT_WIDTH: "1290"
+  SHOT_HEIGHT: "2796"
+
+jobs:
+  shots:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+          xcodegen generate
+          test -d "${SCHEME}.xcodeproj"
+
+      - name: Pick a 1290x2796 simulator
+        id: sim
+        run: |
+          set -u
+          udid=""
+          for name in "iPhone 16 Plus" "iPhone 15 Pro Max" "iPhone 15 Plus" "iPhone 14 Pro Max"; do
+            udid=$(xcrun simctl list devices available | grep -F "$name (" | head -1 | grep -oE '[0-9A-F-]{36}' || true)
+            if [ -n "$udid" ]; then
+              echo "using existing $name $udid"
+              break
+            fi
+          done
+
+          if [ -z "$udid" ]; then
+            runtime=$(xcrun simctl list -j runtimes ios | python3 -c 'import json,sys; r=[x["identifier"] for x in json.load(sys.stdin)["runtimes"] if x.get("isAvailable")]; print(r[-1] if r else "")')
+            for dt in iPhone-16-Plus iPhone-15-Pro-Max iPhone-15-Plus iPhone-14-Pro-Max; do
+              full="com.apple.CoreSimulator.SimDeviceType.$dt"
+              if [ -n "$runtime" ] && xcrun simctl list devicetypes | grep -q "$full"; then
+                udid=$(xcrun simctl create "shots-$dt" "$full" "$runtime" || true)
+                if [ -n "$udid" ]; then
+                  echo "created $dt on $runtime -> $udid"
+                  break
+                fi
+              fi
+            done
+          fi
+
+          if [ -z "$udid" ]; then
+            echo "::error::no 430x932@3x (1290x2796) simulator available on this runner"
+            echo "--- devices ---"
+            xcrun simctl list devices available
+            echo "--- device types ---"
+            xcrun simctl list devicetypes
+            echo "--- runtimes ---"
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project "${SCHEME}.xcodeproj" -scheme "$SCHEME" -configuration Debug \
+            -sdk iphonesimulator -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build \
+            | tee build.log | grep -E "error:|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" build.log
+          ls build/sim/Build/Products/Debug-iphonesimulator/
+
+      - name: Boot and install
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override \
+            --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+          xcrun simctl install "$udid" "build/sim/Build/Products/Debug-iphonesimulator/${SCHEME}.app"
+
+      - name: Capture
+        run: |
+          set -eu
+          udid=${{ steps.sim.outputs.udid }}
+          mkdir -p shots/appstore_6.7
+
+          verify() {
+            w=$(sips -g pixelWidth "$1" | awk '/pixelWidth/{print $2}')
+            h=$(sips -g pixelHeight "$1" | awk '/pixelHeight/{print $2}')
+            echo "$1 ${w}x${h}"
+            if [ "$w" != "$SHOT_WIDTH" ] || [ "$h" != "$SHOT_HEIGHT" ]; then
+              echo "::error::$1 is ${w}x${h}, expected ${SHOT_WIDTH}x${SHOT_HEIGHT} - wrong simulator"
+              exit 1
+            fi
+          }
+
+          # --terminate-running-process, because `terminate` returns before the
+          # process is reaped and simctl silently drops the new arguments when the
+          # app is still alive - that is what makes one shot duplicate the last.
+          # `launch` only proves a PID existed, so the app is checked again after
+          # the settle: a crash a second later photographs SpringBoard, which is
+          # also 1290x2796 and sails through verify(). The PNG is grabbed before
+          # that check so a failure still uploads the evidence.
+          shoot() {
+            out="shots/appstore_6.7/$1.png"
+            xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE_ID" -demo -demo-screen "$2"
+            sleep 10
+            xcrun simctl io "$udid" screenshot --type=png --mask=ignored "$out"
+            if ! xcrun simctl spawn "$udid" launchctl list | grep -q "$BUNDLE_ID"; then
+              echo "::error::$BUNDLE_ID is not running 10s after launching '$2' - it crashed; the shot is SpringBoard"
+              xcrun simctl spawn "$udid" log show --last 3m --style compact --predicate 'process == "Frayed"' | tail -80 || true
+              exit 1
+            fi
+            verify "$out"
+          }
+
+          # Numbered so the alphabetical order asc_media.py uploads in is the
+          # story order: the recap is the hero and goes first. The first one
+          # fails the run before the others cost another five minutes.
+          shoot 1-today today
+          shoot 2-feed feed
+          shoot 3-you you
+
+          ls -la shots/appstore_6.7
+          sips -g pixelWidth -g pixelHeight shots/appstore_6.7/*.png
+
+      # always(): the pixel gate and the crash check both exit the step, and the
+      # PNGs are exactly what you need to see when they do.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: shots
+          if-no-files-found: ignore
+
+      - name: Build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-log
+          path: build.log
+          if-no-files-found: ignore
