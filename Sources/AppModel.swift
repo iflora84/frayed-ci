@@ -489,6 +489,29 @@ final class AppModel: ObservableObject {
         await refreshRecap()
     }
 
+    // MARK: Called it
+
+    /// A "felt it" stamp from Siri or a Shortcut (IDEAS 2.8): a one-minute
+    /// manual moment, never posted, matched against the Watch on the recap.
+    func logFeltMoment(tag: SpikeTag?, at date: Date = Date()) throws {
+        let moment = try Moment(start: date, end: date.addingTimeInterval(60), kind: .spike, tag: tag, source: .manual)
+        try momentStore.save(moment)
+        moments = try momentStore.load()
+    }
+
+    /// The day's stamps, oldest first.
+    func feltStamps(for recap: DayRecap) -> [Date] {
+        guard let day = AppModel.date(fromDayKey: recap.dayKey, calendar: calendar),
+              let start = calendar.date(bySettingHour: AppModel.dayStartHour, minute: 0, second: 0, of: day),
+              let end = calendar.date(byAdding: .day, value: 1, to: start) else {
+            return []
+        }
+        return moments
+            .filter { $0.kind == .spike && $0.source == .manual && $0.start >= start && $0.start < end }
+            .map { $0.start }
+            .sorted()
+    }
+
     // MARK: Posting
 
     /// The `.recap` moment saved for this recap's day, which is what gets posted.

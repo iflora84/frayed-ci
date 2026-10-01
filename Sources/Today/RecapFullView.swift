@@ -64,6 +64,17 @@ struct RecapFullView: View {
                         .foregroundStyle(Theme.warmGrey)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if let called = FeltMatcher.line(FeltMatcher.summarize(model.feltStamps(for: recap), recap: recap)) {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "hand.raised")
+                            .font(.system(size: 13, weight: .semibold))
+                            .padding(.top, 1)
+                        Text(called)
+                            .font(Theme.sans(13))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(Theme.charcoal)
+                }
                 if recap.counts.still > 0 {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "checkmark.circle")
@@ -94,7 +105,7 @@ struct RecapFullView: View {
             hint.foregroundColor = Theme.warmGrey
             line.append(hint)
         } else {
-            line = AttributedString("You called \(noticed) of \(still). ")
+            line = AttributedString("You put a word on \(noticed) of \(still). ")
             let left = still - noticed
             if left > 0 {
                 var rest = AttributedString(left == 1 ? "One still without a word." : "\(left) still without a word.")

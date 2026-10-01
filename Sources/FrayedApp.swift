@@ -1,3 +1,4 @@
+import AppIntents
 import BackgroundTasks
 import SwiftUI
 import UIKit
@@ -27,6 +28,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // LogFeltMomentIntent writes through the same model the screens read.
+        let model = self.model
+        AppDependencyManager.shared.add(dependency: model)
         // Must be registered before launch finishes; .main keeps the handler
         // on the model's actor.
         BGTaskScheduler.shared.register(forTaskWithIdentifier: AppModel.refreshTaskIdentifier, using: .main) { task in
